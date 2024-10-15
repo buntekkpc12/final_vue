@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Product</title>
+    {% include "admin/admin_css_link.html" %}
+</head>
+<body>
+{% include "admin/admin_header.html" %}
+<div id="app" class="container-fluid page-body-wrapper">
+
+    {% include "admin/sidebar_admin.html" %}
+
+    <div class="row flex-grow">
+        <div class="col-12 grid-margin stretch-card">
+            <div class="card card-rounded">
+                <div class="card-body">
+                    <div class="d-sm-flex justify-content-between align-items-start">
+                        <div>
+                            <h4 class="card-title card-title-dash" style="font-family: 'Arial Black',serif">Products</h4>
+                        </div>
+                        <div>
+
+                            <button type="submit" class="btn btn-primary"  @click="openModal">Add New Product</button>
+                        </div>
+                    </div>
+                    <div class="table-responsive mt-1">
+                        <table class="table select-table">
+                            <thead>
+                                <tr>
+                                    <th>Code</th>
+                                    <th>Image</th>
+                                    <th>Name</th>
+                                    <th>Category</th>
+                                    <th>Cost</th>
+                                    <th>Price</th>
+                                    <th>Stock</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% raw %}
+                                <tr v-for="(item, index) in product_list" :key="'list_'+index">
+                                    <td>{{ item.code }}</td>
+                                    <td><img :src="item.image" alt="Product Image" width="50"></td>
+                                    <td>{{ item.name }}</td>
+                                    <td>{{ item.category }}</td>
+                                    <td>{{ item.cost }}</td>
+                                    <td>{{ item.price }}</td>
+                                    <td>{{ item.current_stock }}</td>
+                                    <td>
+                                        <button class="btn btn-warning m-1" @click="editProduct(item)">Edit</button>
+                                        <button class="btn btn-danger" @click="deleteProduct(index)">Delete</button>
+                                    </td>
+                                </tr>
+                                {% endraw %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal fade" id="addProductModal" tabindex="-1" aria-labelledby="addProductModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addProductModalLabel">Add New Product</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form @submit.prevent="submitForm">
+                        <div class="mb-3">
+                            <label for="code" class="form-label">Code</label>
+                            <input type="text" class="form-control" id="code" v-model="form.code" placeholder="Enter product code" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="image" class="form-label">Image</label>
+                            <input type="file" class="form-control" id="image" @change="handleImageUpload" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Name</label>
+                            <input type="text" class="form-control" id="name" v-model="form.name" placeholder="Enter product name" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="category" class="form-label">Category</label>
+                            <input type="text" class="form-control" id="category" v-model="form.category" placeholder="Enter product category" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="cost" class="form-label">Cost</label>
+                            <input type="number" class="form-control" id="cost" v-model="form.cost" placeholder="Enter product cost" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="price" class="form-label">Price</label>
+                            <input type="number" class="form-control" id="price" v-model="form.price" placeholder="Enter product price" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="current_stock" class="form-label">Current Stock</label>
+                            <input type="number" class="form-control" id="current_stock" v-model="form.current_stock" placeholder="Enter current stock" required>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">Save</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+    const { createApp } = Vue;
+
+    const app = createApp({
+        data() {
+            return {
+                isEdit: false,
+                form: {
+                    code: '',
+                    image: '',
+                    name: '',
+                    category: '',
+                    cost: 0,
+                    price: 0,
+                    current_stock: 0
+                },
+                product_list: [
+                    { code: 'P001', image: 'path/to/image1.jpg', name: 'Product A', category: 'Category 1', cost: 10, price: 20, current_stock: 100 },
+                    { code: 'P002', image: 'path/to/image2.jpg', name: 'Product B', category: 'Category 2', cost: 15, price: 25, current_stock: 50 }
+                ]
+            }
+        },
+        methods: {
+            openModal() {
+                this.isEdit = false;
+                this.resetForm();
+                const modal = new bootstrap.Modal(document.getElementById('addProductModal'));
+                modal.show();
+            },
+            editProduct(product) {
+                this.isEdit = true;
+                this.form = { ...product };
+                const modal = new bootstrap.Modal(document.getElementById('addProductModal'));
+                modal.show();
+            },
+            handleImageUpload(event) {
+                const file = event.target.files[0];
+                this.form.image = URL.createObjectURL(file);
+            },
+            submitForm() {
+                if (this.isEdit) {
+                    const index = this.product_list.findIndex(p => p.code === this.form.code);
+                    if (index !== -1) {
+                        this.product_list[index] = { ...this.form };
+                    }
+                } else {
+                    this.product_list.push({ ...this.form });
+                }
+
+                this.resetForm();
+                const modal = bootstrap.Modal.getInstance(document.getElementById('addProductModal'));
+                modal.hide();
+            },
+            deleteProduct(index) {
+                Swal.fire({
+                    title: "Are you sure?",
+                    text: "You won't be able to revert this!",
+                    icon: "warning",
+                    showCancelButton: true,
+                    confirmButtonColor: "#3085d6",
+                    cancelButtonColor: "#d33",
+                    confirmButtonText: "Yes, delete it!"
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        this.product_list.splice(index, 1);
+
+                        Swal.fire({
+                            title: "Deleted!",
+                            text: "The product has been deleted.",
+                            icon: "success"
+                        });
+                    }
+                });
+            },
+            resetForm() {
+                this.form = { code: '', image: '', name: '', category: '', cost: 0, price: 0, current_stock: 0 };
+            }
+        }
+    }).mount('#app');
+</script>
+
+{% include "admin/footer_admin.html" %}
+</body>
+</html>

@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>User</title>
+    {% include "admin/admin_css_link.html" %}
+</head>
+<body>
+{% include "admin/admin_header.html" %}
+<div id="app" class="container-fluid page-body-wrapper">
+
+    {% include "admin/sidebar_admin.html" %}
+
+    <div class="row flex-grow">
+        <div class="col-12 grid-margin stretch-card">
+            <div class="card card-rounded">
+                <div class="card-body">
+                    <div class="d-sm-flex justify-content-between align-items-start">
+                        <div>
+                            <h4 class="card-title card-title-dash" style="font-family: 'Arial Black',serif">Current User</h4>
+                        </div>
+                        <div>
+                            <button type="submit" class="btn btn-primary"  @click="openModal">Add New User</button>
+                        </div>
+                    </div>
+                    <div class="table-responsive mt-1">
+                        <table class="table select-table">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Gender</th>
+                                    <th>Phone</th>
+                                    <th>Email</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% raw %}
+                                <tr v-for="(item, index) in user_list" :key="'list_'+index">
+                                    <td>{{ item.name }}</td>
+                                    <td>{{ item.gender }}</td>
+                                    <td>{{ item.phone }}</td>
+                                    <td>{{ item.email }}</td>
+                                    <td>
+                                        <button class="btn btn-warning m-1" @click="editUser(item)">Edit</button>
+                                        <button class="btn btn-danger" @click="deleteUser(index)">Delete</button>
+                                    </td>
+                                </tr>
+                                {% endraw %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div class="modal fade" id="addUserModal" tabindex="-1" aria-labelledby="addUserModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="addUserModalLabel">Add New User</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form @submit.prevent="submitForm">
+                        <div class="mb-3">
+                            <label for="name" class="form-label">Name</label>
+                            <input type="text" class="form-control" id="name" v-model="form.name" placeholder="Enter customer name" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="gender" class="form-label">Gender</label>
+                            <select class="form-control" id="gender" v-model="form.gender" required>
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                            </select>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="phone" class="form-label">Phone</label>
+                            <input type="tel" class="form-control" id="phone" v-model="form.phone" placeholder="+855" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="email" class="form-label">Email</label>
+                            <input type="email" class="form-control" id="email" v-model="form.email" placeholder="example@mail.com" required>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary">Save</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script>
+    const { createApp } = Vue;
+
+    const app = createApp({
+        data() {
+            return {
+                isEdit: false,
+                form: {
+                    name: '',
+                    gender: 'Male',
+                    phone: '+855',
+                    email: ''
+                },
+                user_list: [
+                    { name: 'Alice', gender: 'Female', phone: '+855123456789', email: 'alice@example.com' },
+                    { name: 'Bob', gender: 'Male', phone: '+855987654321', email: 'bob@example.com' }
+                ]
+            }
+        },
+        methods: {
+            openModal() {
+                this.isEdit = false;
+                this.resetForm();
+                const modal = new bootstrap.Modal(document.getElementById('addUserModal'));
+                modal.show();
+            },
+            editUser(user) {
+                this.isEdit = true;
+                this.form = { ...user };
+                const modal = new bootstrap.Modal(document.getElementById('addUserModal'));
+                modal.show();
+            },
+            submitForm() {
+                if (this.form.name && this.form.phone && this.form.email) {
+                    if (this.isEdit) {
+                        const index = this.user_list.findIndex(u => u.email === this.form.email);
+                        if (index !== -1) {
+                            this.user_list[index] = { ...this.form };
+                        }
+                    } else {
+                        this.user_list.push({
+                            name: this.form.name,
+                            gender: this.form.gender,
+                            phone: this.form.phone,
+                            email: this.form.email
+                        });
+                    }
+
+                    this.resetForm();
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('addUserModal'));
+                    modal.hide();
+                } else {
+                    console.log("Please fill all required fields");
+                }
+            },
+            deleteUser(index) {
+                Swal.fire({
+                    title: "Are you sure?",
+                    text: "You won't be able to revert this!",
+                    icon: "warning",
+                    showCancelButton: true,
+                    confirmButtonColor: "#3085d6",
+                    cancelButtonColor: "#d33",
+                    confirmButtonText: "Yes, delete it!"
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        this.user_list.splice(index, 1);
+
+                        Swal.fire({
+                            title: "Deleted!",
+                            text: "The user has been deleted.",
+                            icon: "success"
+                        });
+                    }
+                });
+            },
+            resetForm() {
+                this.form = { name: '', gender: 'Male', phone: '+855', email: '' };
+            }
+        }
+    }).mount('#app');
+</script>
+
+{% include "admin/footer_admin.html" %}
+</body>
+</html>
