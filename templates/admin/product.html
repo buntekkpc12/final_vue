@@ -20,12 +20,11 @@
                             <h4 class="card-title card-title-dash" style="font-family: 'Bahnschrift SemiBold',serif">Products</h4>
                         </div>
                         <div>
-
-                            <button type="submit" class="btn btn-primary"  @click="openModal">Add New Product</button>
+                            <button type="button" class="btn btn-primary" @click="openModal">Add New Product</button>
                         </div>
                     </div>
                     <div class="table-responsive">
-                    <table class="table table-hover">
+                        <table class="table table-hover">
                             <thead>
                                 <tr>
                                     <th>Code</th>
@@ -39,8 +38,8 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                {% raw %}
-                                <tr v-for="(item, index) in product_list" :key="'list_'+index">
+                            {% raw %}
+                                <tr v-for="(item, index) in product_list" :key="item.id">
                                     <td>{{ item.code }}</td>
                                     <td><img :src="item.image" alt="Product Image" width="50"></td>
                                     <td>{{ item.name }}</td>
@@ -62,51 +61,49 @@
         </div>
     </div>
 
-    <!-- Modal -->
+    <!-- Modal for Adding/Editing Product -->
     <div class="modal fade" id="addProductModal" tabindex="-1" aria-labelledby="addProductModalLabel" aria-hidden="true">
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="addProductModalLabel">Add New Product</h5>
+                    <h5 class="modal-title" id="addProductModalLabel">Add Product</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <form @submit.prevent="submitForm">
+                    <form @submit.prevent="submitForm" enctype="multipart/form-data">
                         <div class="mb-3">
                             <label for="code" class="form-label">Code</label>
-                            <input type="text" class="form-control" id="code" v-model="form.code" placeholder="Enter product code" required>
+                            <input type="text" class="form-control" id="code" v-model="form.code" required>
                         </div>
-
                         <div class="mb-3">
-                            <label for="image" class="form-label">Image</label>
-                            <input type="file" class="form-control" id="image" @change="handleImageUpload" required>
+                            <label for="image" class="form-label">Product Image</label>
+                            <input type="file" class="form-control" id="image" @change="onFileChange">
                         </div>
-
                         <div class="mb-3">
                             <label for="name" class="form-label">Name</label>
-                            <input type="text" class="form-control" id="name" v-model="form.name" placeholder="Enter product name" required>
+                            <input type="text" class="form-control" id="name" v-model="form.name" required>
                         </div>
-
                         <div class="mb-3">
+                        {% raw %}
                             <label for="category" class="form-label">Category</label>
-                            <input type="text" class="form-control" id="category" v-model="form.category" placeholder="Enter product category" required>
+                            <select class="form-control" id="category" v-model="form.category" required>
+                                <option value="" disabled>Select a category</option>
+                                <option v-for="cat in categories" :value="cat.id" :key="cat.id">{{ cat.name }}</option>
+                            </select>
+                            {% endraw %}
                         </div>
-
                         <div class="mb-3">
                             <label for="cost" class="form-label">Cost</label>
-                            <input type="number" class="form-control" id="cost" v-model="form.cost" placeholder="Enter product cost" required>
+                            <input type="number" class="form-control" id="cost" v-model="form.cost" required>
                         </div>
-
                         <div class="mb-3">
                             <label for="price" class="form-label">Price</label>
-                            <input type="number" class="form-control" id="price" v-model="form.price" placeholder="Enter product price" required>
+                            <input type="number" class="form-control" id="price" v-model="form.price" required>
                         </div>
-
                         <div class="mb-3">
                             <label for="current_stock" class="form-label">Current Stock</label>
-                            <input type="number" class="form-control" id="current_stock" v-model="form.current_stock" placeholder="Enter current stock" required>
+                            <input type="number" class="form-control" id="current_stock" v-model="form.current_stock" required>
                         </div>
-
                         <button type="submit" class="btn btn-primary">Save</button>
                     </form>
                 </div>
@@ -126,21 +123,36 @@
             return {
                 isEdit: false,
                 form: {
+                    id: null,
                     code: '',
-                    image: '',
                     name: '',
                     category: '',
-                    cost: 0,
-                    price: 0,
-                    current_stock: 0
+                    cost: '',
+                    price: '',
+                    current_stock: '',
+                    image: null
                 },
-                product_list: [
-                    { code: 'P001', image: 'path/to/image1.jpg', name: 'Product A', category: 'Category 1', cost: 10, price: 20, current_stock: 100 },
-                    { code: 'P002', image: 'path/to/image2.jpg', name: 'Product B', category: 'Category 2', cost: 15, price: 25, current_stock: 50 }
-                ]
+                product_list: [],
+                categories: []
             }
         },
         methods: {
+            fetchProducts() {
+                fetch('/get_products')
+                    .then(response => response.json())
+                    .then(data => {
+                        this.product_list = data;
+                    })
+                    .catch(error => console.error('Error fetching products:', error));
+            },
+            fetchCategories() {
+                fetch('/get_categories')
+                    .then(response => response.json())
+                    .then(data => {
+                        this.categories = data;
+                    })
+                    .catch(error => console.error('Error fetching categories:', error));
+            },
             openModal() {
                 this.isEdit = false;
                 this.resetForm();
@@ -149,29 +161,63 @@
             },
             editProduct(product) {
                 this.isEdit = true;
-                this.form = { ...product };
+                this.form = { ...product, image: null };
                 const modal = new bootstrap.Modal(document.getElementById('addProductModal'));
                 modal.show();
             },
-            handleImageUpload(event) {
-                const file = event.target.files[0];
-                this.form.image = URL.createObjectURL(file);
-            },
             submitForm() {
-                if (this.isEdit) {
-                    const index = this.product_list.findIndex(p => p.code === this.form.code);
-                    if (index !== -1) {
-                        this.product_list[index] = { ...this.form };
-                    }
-                } else {
-                    this.product_list.push({ ...this.form });
+                const url = this.isEdit ? `/update_product/${this.form.id}` : '/add_product';
+                const method = this.isEdit ? 'PUT' : 'POST';
+
+                const formData = new FormData();
+                formData.append('code', this.form.code);
+                formData.append('name', this.form.name);
+                formData.append('category', this.form.category);
+                formData.append('cost', this.form.cost);
+                formData.append('price', this.form.price);
+                formData.append('current_stock', this.form.current_stock);
+
+                if (this.form.image) {
+                    formData.append('image', this.form.image);
                 }
 
-                this.resetForm();
-                const modal = bootstrap.Modal.getInstance(document.getElementById('addProductModal'));
-                modal.hide();
+                fetch(url, {
+                    method: method,
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.message) {
+                        Swal.fire({
+                            position: "top-end",
+                            icon: "success",
+                            title: "Product saved successfully!",
+                            showConfirmButton: false,
+                            timer: 1500
+                        });
+                        this.fetchProducts();
+                        this.resetForm();
+                        this.closeModal();
+                    } else {
+
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Oops...',
+                            text: data.error || 'Something went wrong!'
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Oops...',
+                        text: 'Network error or server unreachable!'
+                    });
+                });
             },
             deleteProduct(index) {
+                const product = this.product_list[index];
                 Swal.fire({
                     title: "Are you sure?",
                     text: "You won't be able to revert this!",
@@ -182,19 +228,57 @@
                     confirmButtonText: "Yes, delete it!"
                 }).then((result) => {
                     if (result.isConfirmed) {
-                        this.product_list.splice(index, 1);
-
-                        Swal.fire({
-                            title: "Deleted!",
-                            text: "The product has been deleted.",
-                            icon: "success"
-                        });
+                        fetch(`/delete_product/${product.id}`, {
+                            method: 'DELETE'
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.message === 'Product deleted successfully') {
+                                this.product_list.splice(index, 1);
+                                Swal.fire({
+                                    title: "Deleted!",
+                                    text: "The product has been deleted.",
+                                    icon: "success"
+                                });
+                            } else {
+                                console.error(data.error);
+                                Swal.fire({
+                                    icon: 'error',
+                                    title: 'Oops...',
+                                    text: data.error || 'Something went wrong!'
+                                });
+                            }
+                        })
+                        .catch(error => console.error('Error:', error));
                     }
                 });
             },
             resetForm() {
-                this.form = { code: '', image: '', name: '', category: '', cost: 0, price: 0, current_stock: 0 };
+                this.form = {
+                    id: null,
+                    code: '',
+                    name: '',
+                    category: '',
+                    cost: '',
+                    price: '',
+                    current_stock: '',
+                    image: null
+                };
+            },
+            onFileChange(e) {
+                this.form.image = e.target.files[0];
+            },
+            closeModal() {
+                const modal = bootstrap.Modal.getInstance(document.getElementById('addProductModal'));
+                if (modal) {
+                    modal.hide();
+                }
+                this.form.image = null;
             }
+        },
+        mounted() {
+            this.fetchProducts();
+            this.fetchCategories();
         }
     }).mount('#app');
 </script>
