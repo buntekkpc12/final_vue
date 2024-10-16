@@ -13,6 +13,7 @@ def get_db_connection():
     return connection
 
 
+# Route to render category template
 @app.route('/admin/category')
 def category():
     return render_template("admin/category.html")
@@ -38,7 +39,11 @@ def add_category():
 
         return jsonify({'message': 'Category added successfully'}), 201
 
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
+
+# Get all categories
 @app.route('/get_categories', methods=['GET'])
 def get_categories():
     try:
@@ -49,12 +54,14 @@ def get_categories():
 
         cursor.close()
         connection.close()
+
         return jsonify(categories), 200
 
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
+# Update a category
 @app.route('/update_category/<int:id>', methods=['PUT'])
 def update_category(id):
     try:
@@ -74,8 +81,11 @@ def update_category(id):
 
         return jsonify({'message': 'Category updated successfully'}), 200
 
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
+# Delete a category
 @app.route('/delete_category/<int:id>', methods=['DELETE'])
 def delete_category(id):
     try:
@@ -90,3 +100,6 @@ def delete_category(id):
         connection.close()
 
         return jsonify({'message': 'Category deleted successfully'}), 200
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
