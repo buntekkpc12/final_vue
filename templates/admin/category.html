@@ -91,45 +91,68 @@
             return {
                 isEdit: false,
                 form: {
+                    id: null,
                     name: '',
                     description: ''
                 },
-                category_list: [
-                    { name: 'Beer', description: 'A type of alcoholic drink' },
-                    { name: 'Juice', description: 'A non-alcoholic beverage' }
-                ]
+                category_list: []
             }
         },
         methods: {
+
+            fetchCategories() {
+                fetch('/get_categories')
+                    .then(response => response.json())
+                    .then(data => {
+                        this.category_list = data;
+                    })
+                    .catch(error => console.error('Error fetching categories:', error));
+            },
             openModal() {
                 this.isEdit = false;
                 this.resetForm();
                 const modal = new bootstrap.Modal(document.getElementById('addUserModal'));
                 modal.show();
             },
-            editUser(user) {
+            editUser(category) {
                 this.isEdit = true;
-                this.form = { ...user };
+                this.form = { ...category };
                 const modal = new bootstrap.Modal(document.getElementById('addUserModal'));
                 modal.show();
             },
             submitForm() {
-                if (this.isEdit) {
+                const url = this.isEdit ? `/update_category/${this.form.id}` : '/add_category';
+                const method = this.isEdit ? 'PUT' : 'POST';
 
-                    const index = this.category_list.findIndex(u => u.name === this.form.name);
-                    if (index !== -1) {
-                        this.category_list[index] = { ...this.form };
+                fetch(url, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(this.form)
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.message) {
+                        Swal.fire({
+                            position: "top-end",
+                            icon: "success",
+                            title: "Category saved successfully!",
+                            showConfirmButton: false,
+                            timer: 1500
+                        });
+                        this.fetchCategories();
+                        this.resetForm();
+                        const modal = bootstrap.Modal.getInstance(document.getElementById('addUserModal'));
+                        modal.hide();
+                    } else {
+                        console.error(data.error);
                     }
-                } else {
-
-                    this.category_list.push({ ...this.form });
-                }
-
-                this.resetForm();
-                const modal = bootstrap.Modal.getInstance(document.getElementById('addUserModal'));
-                modal.hide();
+                })
+                .catch(error => console.error('Error:', error));
             },
             deleteUser(index) {
+                const category = this.category_list[index];
                 Swal.fire({
                     title: "Are you sure?",
                     text: "You won't be able to revert this!",
@@ -140,21 +163,36 @@
                     confirmButtonText: "Yes, delete it!"
                 }).then((result) => {
                     if (result.isConfirmed) {
-                        this.category_list.splice(index, 1);
-                        Swal.fire({
-                            title: "Deleted!",
-                            text: "The category has been deleted.",
-                            icon: "success"
-                        });
+                        fetch(`/delete_category/${category.id}`, {
+                            method: 'DELETE'
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.message === 'Category deleted successfully') {
+                                this.category_list.splice(index, 1);
+                                Swal.fire({
+                                    title: "Deleted!",
+                                    text: "The category has been deleted.",
+                                    icon: "success"
+                                });
+                            } else {
+                                console.error(data.error);
+                            }
+                        })
+                        .catch(error => console.error('Error:', error));
                     }
                 });
             },
             resetForm() {
-                this.form = { name: '', description: '' };
+                this.form = { id: null, name: '', description: '' };
             }
+        },
+        mounted() {
+            this.fetchCategories();
         }
     }).mount('#app');
 </script>
+
 
 {% include "admin/footer_admin.html" %}
 </body>
