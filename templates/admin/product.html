@@ -66,7 +66,9 @@
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="addProductModalLabel">Add Product</h5>
+                {% raw %}
+                    <h5 class="modal-title" id="addProductModalLabel">{{ isEdit ? 'Edit Product' : 'Add new Product' }}</h5>
+                    {% endraw %}
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
@@ -104,7 +106,10 @@
                             <label for="current_stock" class="form-label">Current Stock</label>
                             <input type="number" class="form-control" id="current_stock" v-model="form.current_stock" required>
                         </div>
-                        <button type="submit" class="btn btn-primary">Save</button>
+                        {% raw %}
+
+                        <button type="submit" class="btn btn-primary">{{ isEdit ? 'Update' : 'Save' }}</button>
+                        {% endraw %}
                     </form>
                 </div>
             </div>

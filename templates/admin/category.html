@@ -57,7 +57,9 @@
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="addUserModalLabel">Add New Category</h5>
+                {% raw %}
+                    <h5 class="modal-title" id="addUserModalLabel">{{ isEdit ? 'Edit Category' : 'Add new Category' }}</h5>
+                    {% endraw %}
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
@@ -71,8 +73,10 @@
                             <label for="description" class="form-label">Description</label>
                             <input type="text" class="form-control" id="description" v-model="form.description" placeholder="Enter category description" required>
                         </div>
+                        {% raw %}
 
-                        <button type="submit" class="btn btn-primary">Save</button>
+                        <button type="submit" class="btn btn-primary">{{ isEdit ? 'Update' : 'Save' }}</button>
+                        {% endraw %}
                     </form>
                 </div>
             </div>

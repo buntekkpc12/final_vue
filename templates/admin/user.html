@@ -61,7 +61,9 @@
             <div class="modal-dialog">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title" id="addUserModalLabel">Add New User</h5>
+                    {% raw %}
+                        <h5 class="modal-title" id="addUserModalLabel">{{ isEdit ? 'Edit User' : 'Add new User' }}</h5>
+                        {% endraw %}
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <div class="modal-body">
@@ -89,7 +91,10 @@
                                 <input type="email" class="form-control" id="email" v-model="form.email" placeholder="example@mail.com" required>
                             </div>
 
-                            <button type="submit" class="btn btn-primary">Save</button>
+                            {% raw %}
+
+                              <button type="submit" class="btn btn-primary">{{ isEdit ? 'Update' : 'Save' }}</button>
+                        {% endraw %}
                         </form>
                     </div>
                 </div>
