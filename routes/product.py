@@ -4,7 +4,6 @@ import mysql.connector
 import os
 from werkzeug.utils import secure_filename
 
-
 UPLOAD_FOLDER = os.path.join('static', 'images')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
@@ -13,6 +12,7 @@ app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
 
 def get_db_connection():
     connection = mysql.connector.connect(
@@ -39,7 +39,6 @@ def add_product():
         price = request.form.get('price')
         current_stock = request.form.get('current_stock')
 
-
         image_file = request.files.get('image')
         filename = None
 
@@ -47,7 +46,6 @@ def add_product():
             filename = secure_filename(image_file.filename)
             image_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             image_file.save(image_path)
-
 
         connection = get_db_connection()
         cursor = connection.cursor()
@@ -63,6 +61,9 @@ def add_product():
         connection.close()
 
         return jsonify({'message': 'Product added successfully'}), 201
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/get_products', methods=['GET'])
@@ -118,6 +119,8 @@ def update_product(id):
 
         return jsonify({'message': 'Product updated successfully'}), 200
 
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/delete_product/<int:id>', methods=['DELETE'])
