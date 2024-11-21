@@ -28,6 +28,7 @@
                             <table class="table table-hover">
                                 <thead>
                                     <tr>
+                                    <th>Image</th>
                                         <th>Name</th>
                                         <th>Gender</th>
                                         <th>Phone</th>
@@ -38,6 +39,10 @@
                                 <tbody>
                                     {% raw %}
                                     <tr v-for="(item, index) in user_list" :key="'list_'+index">
+                                    <td>
+    <img :src="'/static/images/cropped/' + item.image" alt="User Image" class="img-thumbnail" style="width: 50px; height: 50px;" />
+</td>
+
                                         <td>{{ item.name }}</td>
                                         <td>{{ item.gender }}</td>
                                         <td>{{ item.phone }}</td>
@@ -68,6 +73,21 @@
                     </div>
                     <div class="modal-body">
                         <form @submit.prevent="submitForm">
+                        <div class="mb-3">
+                        <label for="image" class="form-label">Choose Image</label>
+                        <input type="file" class="form-control" id="image" @change="onImageChange">
+                    </div>
+                    <div v-if="imagePreview">
+                        <img id="imagePreview" :src="imagePreview" class="img-fluid mt-2" />
+                    </div>
+                    <!-- Show existing image if not cropping -->
+                    <div v-if="!imagePreview && form.image" class="mt-3">
+                        <img :src="'/static/images/cropped/' + form.image" alt="Current Image" class="img-fluid mt-2" style="max-height: 200px; object-fit: cover;" />
+                    </div>
+
+                    <div v-if="imagePreview" class="mt-3">
+                        <button type="button" class="btn btn-success" @click="cropImage">Crop Image</button>
+                    </div>
                             <div class="mb-3">
                                 <label for="name" class="form-label">Name</label>
                                 <input type="text" class="form-control" id="name" v-model="form.name" placeholder="Enter customer name" required>
@@ -103,6 +123,10 @@
 
     </div>
 
+
+<link href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css" rel="stylesheet" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
+
 <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <script>
@@ -116,9 +140,13 @@
                         name: '',
                         gender: 'Male',
                         phone: '+855',
-                        email: ''
+                        email: '',
+                        croppedImage: null
                     },
-                    user_list: []
+                    user_list: [],
+                    imageFile: null,
+        imagePreview: null,
+        cropper: null
                 }
             },
             methods: {
@@ -138,6 +166,32 @@
                     modal.show();
                 },
 
+                onImageChange(event) {
+        const file = event.target.files[0];
+        if (file) {
+            this.imageFile = file;
+            this.imagePreview = URL.createObjectURL(file);
+
+            // Initialize Cropper.js
+            this.$nextTick(() => {
+                const imageElement = document.getElementById('imagePreview');
+                this.cropper = new Cropper(imageElement, {
+                    aspectRatio: 1,
+                    viewMode: 1
+                });
+            });
+        }
+    },
+
+     cropImage() {
+        if (this.cropper) {
+            this.form.croppedImage = this.cropper.getCroppedCanvas().toDataURL();
+            this.imagePreview = this.form.croppedImage;
+            this.cropper.destroy();
+            this.cropper = null;
+        }
+    },
+
                 editUser(user) {
                     this.isEdit = true;
                     this.form = { ...user };
@@ -145,39 +199,82 @@
                     modal.show();
                 },
 
-                submitForm() {
-                    if (this.form.name && this.form.phone && this.form.email) {
-                        const url = this.isEdit ? `/update_user/${this.form.id}` : '/add_user';
-                        const method = this.isEdit ? 'PUT' : 'POST';
+                 submitForm() {
+    const formData = new FormData();
+    formData.append('name', this.form.name);
+    formData.append('gender', this.form.gender);
+    formData.append('phone', this.form.phone);
+    formData.append('email', this.form.email);
 
-                        fetch(url, {
-                            method: method,
-                            headers: {
-                                'Content-Type': 'application/json'
-                            },
-                            body: JSON.stringify(this.form)
-                        })
-                        .then(response => response.json())
-                        .then(data => {
-                            if (data.message) {
-                                Swal.fire({
-                                    position: "top-end",
-                                    icon: "success",
-                                    title: this.isEdit ? "User edited successfully!" : "User saved successfully!",
-                                    showConfirmButton: false,
-                                    timer: 1500
-                                });
-                                this.fetchUsers();
-                                this.resetForm();
-                                const modal = bootstrap.Modal.getInstance(document.getElementById('addUserModal'));
-                                modal.hide();
-                            } else {
-                                console.error(data.error);
-                            }
-                        })
-                        .catch(error => console.error('Error:', error));
-                    }
-                },
+    if (this.form.croppedImage) {
+        // Append the cropped image as Base64 if available
+        formData.append('image', this.form.croppedImage); // Send as Base64 string
+    } else if (this.imageFile) {
+        // Send the file if no cropped image
+        formData.append('image', this.imageFile);
+    }
+
+    // Determine URL and method
+    const url = this.isEdit ? `/update_user/${this.form.id}` : '/add_user';
+    const method = this.isEdit ? 'PUT' : 'POST';
+
+    // Log the form data for debugging
+    console.log([...formData.entries()]);
+
+    fetch(url, {
+        method: method,
+        body: formData
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.message) {
+            Swal.fire({
+                position: "top-end",
+                icon: "success",
+                title: this.isEdit ? "User updated successfully!" : "User saved successfully!",
+                showConfirmButton: false,
+                timer: 1500
+            });
+
+            // If editing, update the image and other user details in the list
+            if (this.isEdit) {
+                const index = this.user_list.findIndex(user => user.id === this.form.id);
+                if (index !== -1) {
+                    this.user_list[index].image = data.image; // Update the image
+                    this.user_list[index].name = this.form.name;
+                    this.user_list[index].gender = this.form.gender;
+                    this.user_list[index].phone = this.form.phone;
+                    this.user_list[index].email = this.form.email;
+                }
+            }
+
+            this.fetchUsers(); // Refresh user list
+            this.resetForm(); // Clear the form
+            const modal = bootstrap.Modal.getInstance(document.getElementById('addUserModal'));
+            modal.hide(); // Close the modal
+        } else {
+            Swal.fire({
+                icon: "error",
+                title: "Oops...",
+                text: data.error || "Something went wrong!"
+            });
+            console.error(data.error);
+        }
+    })
+    .catch(error => {
+        console.error("Error:", error);
+        Swal.fire({
+            icon: "error",
+            title: "Error",
+            text: error.message || "Something went wrong!"
+        });
+    });
+},
 
                 deleteUser(user, index) {
                     Swal.fire({
@@ -212,8 +309,14 @@
                 },
 
                 resetForm() {
-                    this.form = { name: '', gender: 'Male', phone: '+855', email: '' };
-                }
+        this.form = { name: '', gender: 'Male', phone: '+855', email: '', croppedImage: null };
+        this.imageFile = null;
+        this.imagePreview = null;
+        if (this.cropper) {
+            this.cropper.destroy();
+            this.cropper = null;
+        }
+    }
             },
             mounted() {
                 this.fetchUsers();
