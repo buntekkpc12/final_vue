@@ -4,7 +4,9 @@ import uuid
 import logging
 from flask import request, jsonify, render_template, send_from_directory
 import mysql.connector
-from app import app  # Import app from your main app file
+from app import app
+from PIL import Image
+from werkzeug.utils import secure_filename
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -18,10 +20,19 @@ def get_db_connection():
         database='pos_final'
     )
 
+app.config['CROPPED_FOLDER'] = 'static/images/cropped'
+app.config['COMPRESSED_FOLDER'] = 'static/images/compressed'
+
+
 # Route to display user page
 @app.route('/admin/user')
 def user():
     return render_template("admin/user.html")
+
+def allowed_file(filename):
+    allowed_extensions = {'png', 'jpg', 'jpeg', 'gif'}
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_extensions
+
 
 # Add new user
 @app.route('/add_user', methods=['POST'])
@@ -37,19 +48,59 @@ def add_user():
         # Parse image data (file upload or Base64 string)
         image_data = request.files.get('image') or data.get('image')
         image_path = None
+        print(image_data)
 
-        if image_data and isinstance(image_data, str):
-            # Save Base64 image
-            image_path = save_base64_image(image_data, 'static/images/cropped/')
-        elif image_data:
-            # Save file upload
-            image_path = save_uploaded_file(image_data, 'static/images/cropped/')
+        original_image = request.files.get('original') or data.get('original')
+        original_path = None
+        print(original_image)
+
+        def compress_image(image_file, save_path):
+            image_file.seek(0, os.SEEK_END)  # Move pointer to the end to check the size
+            file_size = image_file.tell()  # Get the size of the file in bytes
+
+            print(file_size / 1024 / 1024)
+
+            if file_size > 2 * 1024 * 1024:
+
+                image_file.seek(0)  # Reset pointer back to the start before opening with Pillow
+                img = Image.open(image_file)
+                img = img.convert("RGB")  # Ensure it’s in RGB mode (needed for saving .jpeg)
+                img.save(save_path, format='JPEG', quality=75)  # Save with reduced quality
+                return True
+            else:
+                # If the file size is acceptable, save it directly
+                image_file.seek(0)  # Reset pointer back to the start
+                image_file.save(save_path)
+                return False
+
+
+
+        if image_data:
+            if isinstance(image_data, str):  # Base64 string
+                image_path = save_base64_image(image_data, app.config['CROPPED_FOLDER'])
+                image_name = os.path.basename(image_path)
+            else:  # File object
+                filename = secure_filename(image_data.filename)
+                image_path = os.path.join(app.config['CROPPED_FOLDER'], filename)
+                image_data.save(image_path)
+                image_name = filename
+
+        if original_image:
+            if isinstance(original_image, str):  # Base64 string
+                original_path = save_base64_image(original_image, app.config['COMPRESSED_FOLDER'])
+                image_name = os.path.basename(original_path)
+            else:  # File object
+                filename = secure_filename(original_image.filename)
+                original_path = os.path.join(app.config['COMPRESSED_FOLDER'], filename)
+                original_image.save(original_path)
+                image_name = filename
+
 
         # Insert user into the database
         connection = get_db_connection()
         cursor = connection.cursor()
         query = "INSERT INTO user (name, gender, phone, email, image) VALUES (%s, %s, %s, %s, %s)"
-        cursor.execute(query, (name, gender, phone, email, image_path))
+        cursor.execute(query, (name, gender, phone, email, image_name))
         connection.commit()
 
         cursor.close()
@@ -78,13 +129,31 @@ def get_users():
         logging.error(f"Error occurred: {e}")
         return jsonify({'error': str(e)}), 500
 
-# Delete user by ID
 @app.route('/delete_user/<int:id>', methods=['DELETE'])
 def delete_user(id):
     try:
         connection = get_db_connection()
         cursor = connection.cursor()
 
+        # Fetch the image path for the user before deletion
+        cursor.execute("SELECT image FROM user WHERE id = %s", (id,))
+        user = cursor.fetchone()
+
+        # If the user exists and has an image associated with it
+        if user and user[0]:
+            # Full path to image in cropped and compressed folders
+            cropped_image_path = os.path.join('static', 'images', 'cropped', user[0])
+            compressed_image_path = os.path.join('static', 'images', 'compressed', user[0])
+
+            # Check if the image file exists in the cropped folder and delete it
+            if os.path.exists(cropped_image_path):
+                os.remove(cropped_image_path)
+
+            # Check if the image file exists in the compressed folder and delete it
+            if os.path.exists(compressed_image_path):
+                os.remove(compressed_image_path)
+
+        # Now, delete the user from the database
         query = "DELETE FROM user WHERE id = %s"
         cursor.execute(query, (id,))
         connection.commit()
@@ -109,34 +178,32 @@ def update_user(id):
         email = data.get('email')
 
         # Handle image upload and save the image file name
-        image_data = request.files.get('image') or data.get('image')  # Check if the image is a file or Base64
+        image_data = request.files.get('image') or data.get('image')
         image_path = None
 
-        if image_data and isinstance(image_data, str):
-            # Base64 Image
-            image_path = save_base64_image(image_data, 'static/images/cropped/')
-        elif image_data:
-            # File Upload
-            image_filename = image_data.filename
-            image_path = f'static/images/cropped/{image_filename}'
-            image_data.save(os.path.join(current_app.root_path, image_path))
-
-        # Connect to database and update user data
         connection = get_db_connection()
         cursor = connection.cursor()
 
-        if image_path:
-            # Delete old image if there's a new one
+        if image_data:
+            # Fetch old image path from the database
             cursor.execute("SELECT image FROM user WHERE id = %s", (id,))
             old_image_path = cursor.fetchone()
-            if old_image_path and os.path.exists(old_image_path[0]):
-                os.remove(old_image_path[0])  # Delete old image
+            if old_image_path and old_image_path[0]:
+                old_image_full_path = os.path.join('static/images/cropped', old_image_path[0])
+                if os.path.exists(old_image_full_path):
+                    os.remove(old_image_full_path)  # Delete the old image
 
-            # Update user with the new image
+            # Save the new compressed image
+            if isinstance(image_data, str):
+                image_path = save_base64_image(image_data, 'static/images/cropped/', 'static/images/compressed/')
+            else:
+                image_path = save_uploaded_file(image_data, 'static/images/cropped/', 'static/images/compressed/')
+
+        # Update user details in the database
+        if image_path:
             query = "UPDATE user SET name = %s, gender = %s, phone = %s, email = %s, image = %s WHERE id = %s"
             cursor.execute(query, (name, gender, phone, email, image_path, id))
         else:
-            # Update user without changing the image if no new image is uploaded
             query = "UPDATE user SET name = %s, gender = %s, phone = %s, email = %s WHERE id = %s"
             cursor.execute(query, (name, gender, phone, email, id))
 
@@ -147,43 +214,75 @@ def update_user(id):
 
         return jsonify({
             'message': 'User updated successfully',
-            'image': image_path  # Send back the new image path to update the frontend
+            'image': image_path
         }), 200
 
     except Exception as e:
         logging.error(f"Error occurred: {e}")
         return jsonify({'error': str(e)}), 500
-# Helper function to save Base64 image
-def save_base64_image(base64_str, folder):
+
+
+# Helper function to save Base64 image to "cropped" and "compressed" folders
+def save_base64_image(base64_str, cropped_folder):
     try:
-        if not os.path.exists(folder):
-            os.makedirs(folder)
+        # Ensure the cropped folder exists
+        if not os.path.exists(cropped_folder):
+            os.makedirs(cropped_folder)
+
+        # Ensure the compressed folder exists
+        compressed_folder = 'static/images/compressed/'
+        if not os.path.exists(compressed_folder):
+            os.makedirs(compressed_folder)
+
+        # Decode the Base64 image
         image_data = base64.b64decode(base64_str.split(",")[1])
-        file_name = f"{uuid.uuid4().hex}.png"
-        file_path = os.path.join(folder, file_name)
-        with open(file_path, "wb") as f:
+        file_name = f"{uuid.uuid4().hex}.jpg"
+
+        #Save the image to the cropped folder
+        cropped_path = os.path.join(cropped_folder, file_name)
+        with open(cropped_path, "wb") as f:
             f.write(image_data)
-        return file_name  # Return just the filename
+
+        # Save the same image to the compressed folder
+
+        return file_name
     except Exception as e:
         logging.error(f"Error saving Base64 image: {e}")
         raise
 
-def save_uploaded_file(uploaded_file, folder):
+
+# Helper function to save uploaded file to "cropped" and "compressed" folders
+def save_uploaded_file(uploaded_file, cropped_folder):
     try:
-        if not os.path.exists(folder):
-            os.makedirs(folder)
-        file_name = f"{uuid.uuid4().hex}_{uploaded_file.filename}"
-        file_path = os.path.join(folder, file_name)
-        uploaded_file.save(file_path)
-        return file_name  # Return just the filename
+        # Ensure the cropped folder exists
+        if not os.path.exists(cropped_folder):
+            os.makedirs(cropped_folder)
+
+        # Ensure the compressed folder exists
+        compressed_folder = 'static/images/compressed/'
+        if not os.path.exists(compressed_folder):
+            os.makedirs(compressed_folder)
+
+        # Generate a unique file name
+        file_name = f"{uuid.uuid4().hex}.jpg"
+
+        # Save the file to the cropped folder
+        cropped_path = os.path.join(cropped_folder, file_name)
+        uploaded_file.save(cropped_path)
+
+        # Save the same file to the compressed folder
+        compressed_path = os.path.join(compressed_folder, file_name)
+        uploaded_file.save(compressed_path)
+
+        return file_name
     except Exception as e:
         logging.error(f"Error saving uploaded file: {e}")
         raise
 
-
 @app.route('/static/images/cropped/<filename>')
 def serve_image(filename):
     return send_from_directory('static/images/cropped', filename)
+
 
 # Main entry point
 if __name__ == "__main__":

@@ -145,8 +145,9 @@
                     },
                     user_list: [],
                     imageFile: null,
-        imagePreview: null,
-        cropper: null
+                    imagePreview: null,
+                    cropper: null,
+                    croppedImageBlob: ''
                 }
             },
             methods: {
@@ -183,14 +184,53 @@
         }
     },
 
-     cropImage() {
-        if (this.cropper) {
-            this.form.croppedImage = this.cropper.getCroppedCanvas().toDataURL();
-            this.imagePreview = this.form.croppedImage;
-            this.cropper.destroy();
-            this.cropper = null;
-        }
-    },
+
+
+    cropImage() {
+    if (this.cropper) {
+        // Convert the cropped image to a Blob
+        this.cropper.getCroppedCanvas().toBlob((blob) => {
+            if (blob) {
+                // Derive the filename from the original file
+                const originalName = this.imageFile?.name || 'default_image.jpg'; // Fallback if no original name
+                const fileExtension = originalName.split('.').pop(); // Extract extension
+                const fileName = `${originalName.replace(/\.[^/.]+$/, '')}.${fileExtension}`; // Add "cropped_" prefix and keep original extension
+
+                // Create a file from the Blob
+                const file = new File([blob], fileName, { type: blob.type });
+
+                // Update the form with the cropped file
+                this.form.croppedImage = file;
+
+                // Create an object URL for preview
+                this.imagePreview = URL.createObjectURL(blob);
+
+                // Clean up the cropper
+                this.cropper.destroy();
+                this.cropper = null;
+            }
+        }, 'image/jpeg'); // You can set the MIME type here (e.g., 'image/png', 'image/jpeg')
+    }
+},
+    {# cropImage() {#}
+    {#    if (this.cropper) {#}
+    {#        this.form.croppedImage = this.cropper.getCroppedCanvas().toDataURL();#}
+    {#        this.imagePreview = this.form.croppedImage;#}
+    {#        this.cropper.destroy();#}
+    {#        this.cropper = null;#}
+    {##}
+            {#const canvas = this.cropper.getCroppedCanvas();#}
+            {#canvas.toBlob((blob) => {#}
+            {#    const croppedImageUrl = URL.createObjectURL(Blob);#}
+            {#    this.form.croppedImage = croppedImageUrl;#}
+            {#    this.imagePreview = this.form.croppedImage;#}
+            {#    this.croppedImageBlob = blob;#}
+            {#    this.cropper.destroy();#}
+            {#    this.cropper = null;#}
+    {##}
+    {#        })#}
+    {#    }#}
+    {#},#}
 
                 editUser(user) {
                     this.isEdit = true;
@@ -212,6 +252,10 @@
     } else if (this.imageFile) {
         // Send the file if no cropped image
         formData.append('image', this.imageFile);
+    }
+
+    if (this.imageFile) {
+        formData.append('original', this.imageFile);
     }
 
     // Determine URL and method
@@ -241,7 +285,7 @@
                 timer: 1500
             });
 
-            // If editing, update the image and other user details in the list
+
             if (this.isEdit) {
                 const index = this.user_list.findIndex(user => user.id === this.form.id);
                 if (index !== -1) {
@@ -253,8 +297,8 @@
                 }
             }
 
-            this.fetchUsers(); // Refresh user list
-            this.resetForm(); // Clear the form
+            this.fetchUsers();
+            this.resetForm(); //
             const modal = bootstrap.Modal.getInstance(document.getElementById('addUserModal'));
             modal.hide(); // Close the modal
         } else {
