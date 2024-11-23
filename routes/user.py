@@ -171,55 +171,98 @@ def delete_user(id):
 @app.route('/update_user/<int:id>', methods=['PUT'])
 def update_user(id):
     try:
+        # Parse form data
         data = request.form
         name = data.get('name')
         gender = data.get('gender')
         phone = data.get('phone')
         email = data.get('email')
 
-        # Handle image upload and save the image file name
+        # Parse image data (file upload or Base64 string)
         image_data = request.files.get('image') or data.get('image')
         image_path = None
 
-        connection = get_db_connection()
-        cursor = connection.cursor()
+        original_image = request.files.get('original') or data.get('original')
+        original_path = None
 
-        if image_data:
-            # Fetch old image path from the database
-            cursor.execute("SELECT image FROM user WHERE id = %s", (id,))
-            old_image_path = cursor.fetchone()
-            if old_image_path and old_image_path[0]:
-                old_image_full_path = os.path.join('static/images/cropped', old_image_path[0])
-                if os.path.exists(old_image_full_path):
-                    os.remove(old_image_full_path)  # Delete the old image
+        def compress_image(image_file, save_path):
+            image_file.seek(0, os.SEEK_END)  # Move pointer to the end to check the size
+            file_size = image_file.tell()  # Get the size of the file in bytes
 
-            # Save the new compressed image
-            if isinstance(image_data, str):
-                image_path = save_base64_image(image_data, 'static/images/cropped/', 'static/images/compressed/')
+            if file_size > 2 * 1024 * 1024:
+                image_file.seek(0)  # Reset pointer to start
+                img = Image.open(image_file)
+                img = img.convert("RGB")  # Convert to RGB
+                img.save(save_path, format='JPEG', quality=75)  # Save with compression
+                return True
             else:
-                image_path = save_uploaded_file(image_data, 'static/images/cropped/', 'static/images/compressed/')
+                image_file.seek(0)  # Reset pointer
+                image_file.save(save_path)  # Save without compression
+                return False
 
-        # Update user details in the database
-        if image_path:
-            query = "UPDATE user SET name = %s, gender = %s, phone = %s, email = %s, image = %s WHERE id = %s"
-            cursor.execute(query, (name, gender, phone, email, image_path, id))
-        else:
-            query = "UPDATE user SET name = %s, gender = %s, phone = %s, email = %s WHERE id = %s"
-            cursor.execute(query, (name, gender, phone, email, id))
+        # Retrieve current user data
+        connection = get_db_connection()
+        cursor = connection.cursor(dictionary=True)
+        cursor.execute("SELECT * FROM user WHERE id = %s", (id,))
+        user = cursor.fetchone()
+        if not user:
+            return jsonify({'error': 'User not found'}), 404
 
+        # Handle new images
+        if image_data:
+            if isinstance(image_data, str):  # Base64 string
+                image_path = save_base64_image(image_data, app.config['CROPPED_FOLDER'])
+                image_name = os.path.basename(image_path)
+            else:  # File object
+                filename = secure_filename(image_data.filename)
+                image_path = os.path.join(app.config['CROPPED_FOLDER'], filename)
+                image_data.save(image_path)
+                image_name = filename
+
+                # Compress image if needed
+                compressed_path = os.path.join(app.config['COMPRESSED_FOLDER'], filename)
+                compress_image(image_data, compressed_path)
+
+            # Delete old image if a new one is provided
+            if user.get('image'):
+                old_image_cropped = os.path.join(app.config['CROPPED_FOLDER'], user['image'])
+                old_image_compressed = os.path.join(app.config['COMPRESSED_FOLDER'], user['image'])
+                if os.path.exists(old_image_cropped):
+                    os.remove(old_image_cropped)
+                if os.path.exists(old_image_compressed):
+                    os.remove(old_image_compressed)
+
+        # Handle original images
+        if original_image:
+            filename = secure_filename(original_image.filename)
+            original_path = os.path.join(app.config['COMPRESSED_FOLDER'], filename)
+            original_image.save(original_path)
+
+        # Update user data in the database
+        query = """
+        UPDATE user 
+        SET name = %s, gender = %s, phone = %s, email = %s, image = %s 
+        WHERE id = %s
+        """
+        cursor.execute(query, (
+            name or user['name'],
+            gender or user['gender'],
+            phone or user['phone'],
+            email or user['email'],
+            image_name if image_data else user['image'],
+            id
+        ))
         connection.commit()
 
         cursor.close()
         connection.close()
 
-        return jsonify({
-            'message': 'User updated successfully',
-            'image': image_path
-        }), 200
+        return jsonify({'message': 'User updated successfully'}), 200
 
     except Exception as e:
         logging.error(f"Error occurred: {e}")
         return jsonify({'error': str(e)}), 500
+
 
 
 # Helper function to save Base64 image to "cropped" and "compressed" folders
