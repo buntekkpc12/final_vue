@@ -44,21 +44,18 @@ def add_user():
         email = data.get('email')
 
         image_data = request.files.get('image') or data.get('image')
-        image_path = None
-        print(image_data)
-
         original_image = request.files.get('original') or data.get('original')
-        original_path = None
-        print(original_image)
+
+        image_name = None
+        original_name = None
 
         def compress_image(image_file, save_path):
             image_file.seek(0, os.SEEK_END)
             file_size = image_file.tell()
 
-            print(file_size / 1024 / 1024)
+            print(f"File size: {file_size / 1024 / 1024} MB")
 
             if file_size > 2 * 1024 * 1024:
-
                 image_file.seek(0)
                 img = Image.open(image_file)
                 img = img.convert("RGB")
@@ -70,7 +67,7 @@ def add_user():
                 return False
 
         if image_data:
-            if isinstance(image_data, str):  # Base64 string
+            if isinstance(image_data, str):
                 image_path = save_base64_image(image_data, app.config['CROPPED_FOLDER'])
                 image_name = os.path.basename(image_path)
             else:
@@ -79,26 +76,39 @@ def add_user():
                 image_data.save(image_path)
                 image_name = filename
 
+                compressed_path = os.path.join(app.config['COMPRESSED_FOLDER'], filename)
+                compress_image(image_data, compressed_path)
+
         if original_image:
             if isinstance(original_image, str):
                 original_path = save_base64_image(original_image, app.config['COMPRESSED_FOLDER'])
-                image_name = os.path.basename(original_path)
+                original_name = os.path.basename(original_path)
             else:
                 filename = secure_filename(original_image.filename)
                 original_path = os.path.join(app.config['COMPRESSED_FOLDER'], filename)
                 original_image.save(original_path)
-                image_name = filename
+                original_name = filename
+
+                compressed_path = os.path.join(app.config['COMPRESSED_FOLDER'], filename)
+                compress_image(original_image, compressed_path)
 
         connection = get_db_connection()
         cursor = connection.cursor()
-        query = "INSERT INTO user (name, gender, phone, email, image) VALUES (%s, %s, %s, %s, %s)"
-        cursor.execute(query, (name, gender, phone, email, image_name))
+        query = """
+        INSERT INTO user (name, gender, phone, email, image) 
+        VALUES (%s, %s, %s, %s, %s)
+        """
+        cursor.execute(query, (name, gender, phone, email, image_name or original_name))
         connection.commit()
 
         cursor.close()
         connection.close()
 
         return jsonify({'message': 'User added successfully'}), 201
+
+    except Exception as e:
+        logging.error(f"Error occurred: {e}")
+        return jsonify({'error': str(e)}), 500
 
     except Exception as e:
         logging.error(f"Error occurred: {e}")
