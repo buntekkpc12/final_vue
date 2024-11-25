@@ -177,7 +177,6 @@ def update_user(id):
                 image_file.seek(0)
                 img = Image.open(image_file)
                 img = img.convert("RGB")
-                B
                 img.save(save_path, format='JPEG', quality=75)
                 return True
             else:
